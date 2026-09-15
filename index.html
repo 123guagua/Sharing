@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Socks5 批量转二维码工具</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    h2 { color: #6c5ce7; text-align: center; }
+    textarea { width: 100%; height: 200px; padding: 8px; margin: 10px 0; }
+    #generate, #export { background: #6c5ce7; color: #fff; padding: 10px 20px; border: none; cursor: pointer; margin: 5px; }
+    .proxy-block { display: flex; border: 1px solid #ccc; padding: 10px; margin: 15px 0; }
+    .proxy-text { flex: 1; text-align: left; white-space: pre-line; }
+    .proxy-qr { flex: 1; text-align: center; }
+    img { margin-top: 10px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+</head>
+<body>
+  <h2>Socks5 批量转二维码工具</h2>
+  <p>支持格式: host:port:username:password 或 socks5://username:password@host:port</p>
+  <textarea id="proxyList" placeholder="每行一个代理，例如：
+192.204.93.135:7778:4ugvhvko6ou942:idzlar"></textarea>
+  <br>
+  <button id="generate" onclick="makeQR()">批量生成二维码</button>
+  <button id="export" onclick="exportExcel()">导出为Excel</button>
+  <div id="result"></div>
+  <script>
+    let exportData = [];
+    function makeQR() {
+      const lines = document.getElementById('proxyList').value.trim().split("\n");
+      const resultDiv = document.getElementById("result");
+      resultDiv.innerHTML = "";
+      exportData = [];
+      lines.forEach(line => {
+        let text = line.trim();
+        if (!text) return;
+        let type="socks5", host="", port="", user="", pass="", uri="";
+        if (text.startsWith("socks5://")) {
+          const match = text.match(/^socks5:\/\/(.+?):(.+?)@(.+?):(\d+)$/);
+          if (match) { user=match[1]; pass=match[2]; host=match[3]; port=match[4]; uri=text; }
+        } else {
+          const parts = text.split(":");
+          if (parts.length===4) { host=parts[0]; port=parts[1]; user=parts[2]; pass=parts[3]; uri=`socks5://${user}:${pass}@${host}:${port}`; }
+        }
+        const info = `代理类型: ${type}\n代理主机: ${host}\n代理端口: ${port}\n账号: ${user}\n密码: ${pass}`;
+        const block = document.createElement("div");
+        block.className = "proxy-block";
+        const infoDiv = document.createElement("div");
+        infoDiv.className = "proxy-text";
+        infoDiv.textContent = info;
+        const qrDiv = document.createElement("div");
+        qrDiv.className = "proxy-qr";
+        if (uri) {
+          QRCode.toDataURL(uri, { width: 120 }, function (err, url) {
+            if (!err) {
+              const img = document.createElement("img");
+              img.src = url;
+              qrDiv.appendChild(img);
+              exportData.push({ info, qrcode: url });
+            }
+          });
+        }
+        block.appendChild(infoDiv);
+        block.appendChild(qrDiv);
+        resultDiv.appendChild(block);
+      });
+    }
+    async function exportExcel() {
+      if (exportData.length === 0) {
+        alert("请先生成二维码！");
+        return;
+      }
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Proxies");
+      sheet.columns = [
+        { header: "代理信息", width: 40 },
+        { header: "二维码", width: 30 }
+      ];
+      exportData.forEach((item) => {
+        const row = sheet.addRow([item.info, ""]);
+        const imageId = workbook.addImage({ base64: item.qrcode, extension: 'png' });
+        sheet.addImage(imageId, {
+          tl: { col: 1, row: row.number-1 },
+          ext: { width: 150, height: 150 }
+        });
+      });
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "socks5_proxies.xlsx";
+      link.click();
+    }
+  </script>
+</body>
+</html>
