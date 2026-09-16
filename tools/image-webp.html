@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>图片固定尺寸 & WebP 压缩</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,"Microsoft YaHei",sans-serif;background:#f6f7fb;color:#1f2937}.wrap{max-width:1000px;margin:auto;padding:30px 20px 60px}.back{color:#6c5ce7;text-decoration:none}.panel{background:#fff;border:1px solid #e7e9f2;border-radius:16px;padding:24px;margin-top:22px;box-shadow:0 6px 20px rgba(31,41,55,.06)}h1{color:#6c5ce7;margin:18px 0 8px}.sub{color:#6b7280}.drop{border:2px dashed #c9c4f4;border-radius:14px;padding:35px;text-align:center;margin:20px 0;cursor:pointer;background:#faf9ff}.drop.drag{background:#eeeafe}.controls{display:grid;grid-template-columns:1fr 1fr;gap:16px}.field label{display:block;font-weight:bold;margin-bottom:7px}.field input{width:100%;padding:11px;border:1px solid #ddd;border-radius:8px}.check{display:flex;gap:8px;align-items:center;margin-top:16px}.quality{grid-column:1/-1}.quality input{width:100%}button{background:#6c5ce7;color:#fff;border:0;border-radius:8px;padding:12px 20px;cursor:pointer;margin:18px 8px 0 0}.secondary{background:#374151}.result{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}.item{border:1px solid #e5e7eb;border-radius:12px;padding:14px;background:#fff}.item img{width:100%;height:180px;object-fit:contain;background:#f3f4f6;border-radius:8px}.item p{font-size:13px;line-height:1.5}.size{color:#6b7280}.empty{color:#6b7280;text-align:center;padding:20px}@media(max-width:700px){.controls,.result{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="back" href="../">← 返回工具箱</a>
+<h1>🖼️ 图片固定尺寸 & WebP 压缩</h1>
+<p class="sub">批量上传图片，调整到指定尺寸并转换为 WebP。图片在浏览器本地处理，不上传服务器。</p>
+<div class="panel">
+<div class="drop" id="drop">点击选择图片，或把图片拖到这里<br><small>支持 JPG / PNG / GIF / BMP / WebP 等浏览器可读取格式，可批量选择</small><input id="files" type="file" accept="image/*" multiple hidden></div>
+<div class="controls">
+<div class="field"><label>宽度（px）</label><input id="width" type="number" value="1200" min="1"></div>
+<div class="field"><label>高度（px）</label><input id="height" type="number" value="1200" min="1"></div>
+<div class="field quality"><label>WebP 压缩质量：<span id="qv">80</span>%</label><input id="quality" type="range" min="10" max="100" value="80"></div>
+</div>
+<label class="check"><input id="cover" type="checkbox" checked> 保持比例，裁剪到固定尺寸（推荐）</label>
+<label class="check"><input id="upscale" type="checkbox" checked> 小图片允许放大</label>
+<button onclick="convert()">开始转换</button><button class="secondary" onclick="clearAll()">清空</button>
+<div id="result" class="result"><div class="empty">请选择图片后开始转换</div></div>
+</div>
+</div>
+<script>
+const files=document.getElementById('files'),drop=document.getElementById('drop'),quality=document.getElementById('quality');
+let selected=[];
+drop.onclick=()=>files.click();
+files.onchange=()=>{selected=[...files.files];showSelected()};
+quality.oninput=()=>document.getElementById('qv').textContent=quality.value;
+['dragenter','dragover'].forEach(e=>drop.addEventListener(e,x=>{x.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,x=>{x.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',e=>{selected=[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/'));showSelected()});
+function showSelected(){document.getElementById('result').innerHTML=selected.length?'<div class="empty" style="grid-column:1/-1">已选择 '+selected.length+' 张图片，点击“开始转换”</div>':'<div class="empty">请选择图片后开始转换</div>'}
+function loadImage(file){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=URL.createObjectURL(file)})}
+function draw(im,w,h,cover,allowUpscale){
+ let sw=im.naturalWidth,sh=im.naturalHeight;
+ if(!allowUpscale && sw<w && sh<h){w=sw;h=sh}
+ const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');
+ x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';
+ if(cover){
+   const scale=Math.max(w/sw,h/sh);const dw=sw*scale,dh=sh*scale;
+   x.drawImage(im,(w-dw)/2,(h-dh)/2,dw,dh);
+ }else{x.drawImage(im,0,0,w,h)}
+ return c;
+}
+async function convert(){
+ if(!selected.length){alert('请先选择图片');return}
+ const w=Math.max(1,+document.getElementById('width').value||1200),h=Math.max(1,+document.getElementById('height').value||1200);
+ const cover=document.getElementById('cover').checked,up=document.getElementById('upscale').checked;
+ const out=document.getElementById('result');out.innerHTML='';
+ for(const file of selected){
+  try{
+   const im=await loadImage(file),c=draw(im,w,h,cover,up);
+   const blob=await new Promise(r=>c.toBlob(r,'image/webp',quality.value/100));
+   if(!blob)throw Error('浏览器不支持 WebP');
+   const url=URL.createObjectURL(blob),name=file.name.replace(/.[^.]+$/,'')+'-'+w+'x'+h+'.webp';
+   const item=document.createElement('div');item.className='item';
+   const img=document.createElement('img');img.src=url;
+   const p=document.createElement('p');p.innerHTML='<b>'+escapeHtml(file.name)+'</b><br><span class="size">'+format(file.size)+' → '+format(blob.size)+'<br>输出：'+w+' × '+h+' px</span></p>';
+   const a=document.createElement('a');a.href=url;a.download=name;const b=document.createElement('button');b.textContent='下载 WebP';a.appendChild(b);
+   item.append(img,p,a);out.appendChild(item);
+  }catch(e){const d=document.createElement('div');d.className='item';d.textContent='处理失败：'+file.name;out.appendChild(d)}
+ }
+}
+function format(n){return n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB'}
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function clearAll(){selected=[];files.value='';document.getElementById('result').innerHTML='<div class="empty">请选择图片后开始转换</div>'}
+</script>
+</body>
+</html>
