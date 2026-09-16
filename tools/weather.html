@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>今日天气查询</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,"Microsoft YaHei",sans-serif;background:#f6f7fb;color:#1f2937}.wrap{max-width:900px;margin:auto;padding:30px 20px 60px}.back{color:#6c5ce7;text-decoration:none}.hero{background:linear-gradient(135deg,#5b86e5,#36d1dc);color:#fff;border-radius:18px;padding:30px;margin-top:22px}.hero h1{margin:0 0 8px}.search{display:flex;gap:10px;margin:20px 0}.search input{flex:1;padding:13px;border:1px solid #ddd;border-radius:9px;font-size:15px}.search button,.loc{background:#6c5ce7;color:#fff;border:0;border-radius:9px;padding:12px 18px;cursor:pointer}.loc{background:#374151;margin-bottom:20px}.status{color:#6b7280;font-size:14px;min-height:20px}.weather{display:none;background:#fff;border-radius:16px;padding:26px;box-shadow:0 8px 24px rgba(31,41,55,.08)}.main{display:flex;justify-content:space-between;align-items:center;gap:20px}.temp{font-size:58px;font-weight:700}.condition{font-size:20px;margin-top:5px}.meta{color:#6b7280;line-height:1.8}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:25px}.mini{background:#f8f9fc;border-radius:12px;padding:16px}.mini b{display:block;margin-bottom:8px}@media(max-width:650px){.search{flex-direction:column}.main{flex-direction:column;align-items:flex-start}.cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="back" href="../">← 返回工具箱</a>
+<div class="hero"><h1>🌤️ 今日天气</h1><p>查询城市实时天气和今日最高/最低温度</p></div>
+<div class="search"><input id="city" placeholder="输入城市，例如：Sydney、北京、上海"><button onclick="searchCity()">查询天气</button></div>
+<button class="loc" onclick="useLocation()">📍 使用我的当前位置</button>
+<div id="status" class="status"></div>
+<div id="weather" class="weather">
+<div class="main"><div><div id="place"></div><div id="temp" class="temp">--°</div><div id="condition" class="condition">--</div></div><div class="meta"><div id="date"></div><div id="wind"></div><div id="humidity"></div></div></div>
+<div class="cards"><div class="mini"><b>今日最高</b><span id="max">--</span></div><div class="mini"><b>今日最低</b><span id="min">--</span></div><div class="mini"><b>降水概率</b><span id="rain">--</span></div></div>
+</div>
+</div>
+<script>
+const statusEl=document.getElementById('status');
+const weatherEl=document.getElementById('weather');
+const codeMap={0:'晴朗',1:'大致晴朗',2:'局部多云',3:'阴天',45:'雾',48:'雾凇',51:'小毛毛雨',53:'毛毛雨',55:'较强毛毛雨',56:'冻毛毛雨',57:'较强冻毛毛雨',61:'小雨',63:'中雨',65:'大雨',66:'冻雨',67:'强冻雨',71:'小雪',73:'中雪',75:'大雪',77:'雪粒',80:'小阵雨',81:'中阵雨',82:'强阵雨',85:'小阵雪',86:'强阵雪',95:'雷雨',96:'雷雨伴冰雹',99:'强雷雨伴冰雹'};
+function setStatus(t){statusEl.textContent=t}
+async function geocode(name){
+const r=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(name)+'&count=1&language=zh&format=json');
+if(!r.ok)throw new Error('城市查询失败');
+const d=await r.json();if(!d.results?.length)throw new Error('没有找到这个城市');
+return d.results[0]
+}
+async function loadWeather(lat,lon,name,country){
+setStatus('正在查询天气…');
+const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1';
+const r=await fetch(url);if(!r.ok)throw new Error('天气数据获取失败');const d=await r.json();
+document.getElementById('place').textContent='📍 '+name+(country?' · '+country:'');
+document.getElementById('temp').textContent=Math.round(d.current.temperature_2m)+'°C';
+document.getElementById('condition').textContent=codeMap[d.current.weather_code]||'天气情况';
+document.getElementById('date').textContent=d.daily.time[0];
+document.getElementById('wind').textContent='风速：'+d.current.wind_speed_10m+' km/h';
+document.getElementById('humidity').textContent='湿度：'+d.current.relative_humidity_2m+'%';
+document.getElementById('max').textContent=Math.round(d.daily.temperature_2m_max[0])+'°C';
+document.getElementById('min').textContent=Math.round(d.daily.temperature_2m_min[0])+'°C';
+document.getElementById('rain').textContent=(d.daily.precipitation_probability_max[0]??0)+'%';
+weatherEl.style.display='block';setStatus('天气数据已更新');
+}
+async function searchCity(){const name=document.getElementById('city').value.trim();if(!name){setStatus('请输入城市名称');return}try{const c=await geocode(name);await loadWeather(c.latitude,c.longitude,c.name,c.country)}catch(e){setStatus(e.message)}}
+function useLocation(){if(!navigator.geolocation){setStatus('浏览器不支持定位');return}setStatus('正在获取当前位置…');navigator.geolocation.getCurrentPosition(async p=>{try{await loadWeather(p.coords.latitude,p.coords.longitude,'我的位置','')}catch(e){setStatus(e.message)}},()=>setStatus('无法获取定位，请改用城市搜索'))}
+document.getElementById('city').addEventListener('keydown',e=>{if(e.key==='Enter')searchCity()});
+</script>
+</body>
+</html>
